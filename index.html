@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
+<meta name="apple-mobile-web-app-title" content="Teleprompter">
+<title>Teleprompter</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --speed:50;
+  --margin:5;
+  --font-size:42;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:Arial,sans-serif;}
+
+/* SCREENS */
+#screen-read{display:none;width:100%;height:100%;position:relative;overflow:hidden;background:#000;}
+#screen-menu{display:flex;flex-direction:column;width:100%;height:100%;background:#000;overflow-y:auto;}
+
+/* TELEPROMPTER SCROLL AREA */
+#scroll-container{
+  position:absolute;inset:0;overflow:hidden;
+}
+#scroll-content{
+  position:absolute;
+  top:0;left:0;right:0;
+  padding-top:60vh;
+  padding-bottom:60vh;
+  transition:none;
+  will-change:transform;
+}
+#text-body{
+  color:#fff;
+  font-family:Arial,sans-serif;
+  font-size:calc(var(--font-size)*1px);
+  line-height:1.5;
+  margin:0 auto;
+  width:calc(100% - var(--margin)*2%);
+  max-width:calc(100% - var(--margin)*2%);
+  padding:0 calc(var(--margin)*1%);
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+#text-body.flipped{transform:scaleX(-1) scaleY(-1);}
+
+/* CENTER GUIDE LINE */
+#guide-line{
+  position:absolute;
+  top:50%;left:0;right:0;
+  height:3px;
+  background:rgba(255,100,0,0.5);
+  pointer-events:none;
+  z-index:10;
+  transform:translateY(-50%);
+}
+
+/* TOP BAR (reading mode) */
+#top-bar{
+  position:absolute;top:0;left:0;right:0;
+  height:50px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;
+  background:rgba(0,0,0,0.8);
+  z-index:20;
+  backdrop-filter:blur(4px);
+}
+#btn-back{font-size:14px;color:#aaa;background:none;border:1px solid #444;border-radius:8px;padding:6px 12px;cursor:pointer;}
+#script-title-bar{font-size:14px;color:#888;flex:1;text-align:center;}
+#btn-settings-toggle{font-size:14px;color:#aaa;background:none;border:1px solid #444;border-radius:8px;padding:6px 12px;cursor:pointer;}
+
+/* PLAY/PAUSE OVERLAY BUTTON */
+#btn-play{
+  position:absolute;
+  bottom:30px;left:50%;transform:translateX(-50%);
+  width:70px;height:70px;border-radius:50%;
+  background:rgba(255,255,255,0.15);
+  border:2px solid rgba(255,255,255,0.4);
+  color:#fff;font-size:28px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;z-index:20;
+  backdrop-filter:blur(4px);
+}
+#btn-play:active{background:rgba(255,255,255,0.3);}
+
+/* INLINE SETTINGS PANEL */
+#settings-panel{
+  position:absolute;
+  top:50px;left:0;right:0;
+  background:rgba(0,0,0,0.92);
+  z-index:19;
+  padding:16px;
+  border-bottom:1px solid #333;
+  display:none;
+  backdrop-filter:blur(8px);
+}
+#settings-panel.visible{display:block;}
+.sp-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.sp-label{font-size:13px;color:#888;width:70px;flex-shrink:0;}
+.sp-row input[type=range]{flex:1;accent-color:#fff;}
+.sp-val{font-size:13px;color:#fff;width:32px;text-align:right;}
+.sp-row.toggle-row{justify-content:space-between;}
+.toggle-btn{
+  font-size:12px;padding:6px 14px;border-radius:8px;
+  border:1px solid #444;background:none;color:#aaa;cursor:pointer;
+}
+.toggle-btn.active{background:#fff;color:#000;border-color:#fff;}
+
+/* JOYSTICK STATUS */
+#joystick-status{
+  position:absolute;bottom:110px;left:50%;transform:translateX(-50%);
+  font-size:12px;color:#555;z-index:20;white-space:nowrap;
+}
+#joystick-status.connected{color:#2a2;}
+
+/* ===================== MENU SCREEN ===================== */
+#menu-header{
+  padding:20px 16px 10px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid #222;
+}
+#menu-header h1{font-size:20px;font-weight:600;color:#fff;}
+#btn-new-script{
+  font-size:13px;padding:8px 14px;border-radius:10px;
+  border:1px solid #555;background:none;color:#fff;cursor:pointer;
+}
+
+.script-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px;border-bottom:1px solid #1a1a1a;cursor:pointer;
+}
+.script-item:active{background:#111;}
+.script-item-info{}
+.script-item-name{font-size:16px;color:#fff;font-family:Arial,sans-serif;}
+.script-item-meta{font-size:12px;color:#555;margin-top:3px;}
+.script-item-actions{display:flex;gap:8px;}
+.btn-delete{
+  font-size:12px;padding:5px 10px;border-radius:8px;
+  border:1px solid #333;background:none;color:#666;cursor:pointer;
+}
+
+/* EDITOR */
+#screen-editor{
+  display:none;flex-direction:column;
+  width:100%;height:100%;background:#000;
+}
+#editor-header{
+  padding:12px 16px;
+  display:flex;align-items:center;gap:10px;
+  border-bottom:1px solid #222;flex-shrink:0;
+}
+#editor-header button{
+  font-size:13px;padding:7px 14px;border-radius:9px;
+  border:1px solid #444;background:none;color:#fff;cursor:pointer;
+}
+#editor-header button.primary{background:#fff;color:#000;border-color:#fff;}
+#inp-title{
+  flex:1;background:#111;border:1px solid #333;border-radius:9px;
+  color:#fff;font-size:15px;padding:7px 12px;font-family:Arial,sans-serif;
+  outline:none;
+}
+#txt-editor{
+  flex:1;background:#000;color:#ddd;
+  font-family:Arial,sans-serif;font-size:16px;line-height:1.6;
+  padding:16px;border:none;outline:none;resize:none;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* GLOBAL SETTINGS SCREEN */
+#screen-gsettings{
+  display:none;flex-direction:column;
+  width:100%;height:100%;background:#000;overflow-y:auto;
+}
+#gs-header{
+  padding:16px;display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid #222;flex-shrink:0;
+}
+#gs-header h2{font-size:18px;font-weight:500;color:#fff;}
+#gs-header button{font-size:13px;padding:7px 14px;border-radius:9px;border:1px solid #444;background:none;color:#fff;cursor:pointer;}
+.gs-section{padding:20px 16px 0;}
+.gs-section-title{font-size:12px;color:#555;letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;}
+.gs-row{display:flex;align-items:center;gap:12px;margin-bottom:20px;}
+.gs-label{font-size:14px;color:#aaa;width:90px;flex-shrink:0;}
+.gs-row input[type=range]{flex:1;accent-color:#fff;}
+.gs-val{font-size:14px;color:#fff;width:38px;text-align:right;}
+.gs-toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.gs-toggle-label{font-size:14px;color:#aaa;}
+.gs-toggle-btn{font-size:12px;padding:6px 16px;border-radius:8px;border:1px solid #444;background:none;color:#aaa;cursor:pointer;}
+.gs-toggle-btn.active{background:#fff;color:#000;border-color:#fff;}
+.gs-hint{font-size:12px;color:#444;margin-top:-12px;margin-bottom:16px;line-height:1.4;}
+
+</style>
+</head>
+<body>
+
+<!-- ===== MENU SCREEN ===== -->
+<div id="screen-menu">
+  <div id="menu-header">
+    <h1>Teleprompter</h1>
+    <div style="display:flex;gap:8px;">
+      <button id="btn-open-gsettings" style="font-size:13px;padding:8px 14px;border-radius:10px;border:1px solid #555;background:none;color:#aaa;cursor:pointer;">Settings</button>
+      <button id="btn-new-script">+ New Script</button>
+    </div>
+  </div>
+  <div id="script-list"></div>
+  <div id="empty-state" style="padding:60px 20px;text-align:center;color:#444;font-size:15px;display:none;">
+    No scripts yet.<br><br>Tap <strong style="color:#777">+ New Script</strong> to add one.
+  </div>
+</div>
+
+<!-- ===== EDITOR SCREEN ===== -->
+<div id="screen-editor">
+  <div id="editor-header">
+    <button id="btn-editor-back">Cancel</button>
+    <input id="inp-title" type="text" placeholder="Script title…" />
+    <button id="btn-editor-save" class="primary">Save</button>
+  </div>
+  <textarea id="txt-editor" placeholder="Paste or type your script here…" spellcheck="false"></textarea>
+</div>
+
+<!-- ===== GLOBAL SETTINGS SCREEN ===== -->
+<div id="screen-gsettings">
+  <div id="gs-header">
+    <button id="btn-gs-back">← Back</button>
+    <h2>Default Settings</h2>
+  </div>
+
+  <div class="gs-section">
+    <div class="gs-section-title">Scroll</div>
+    <div class="gs-row">
+      <span class="gs-label">Speed</span>
+      <input type="range" id="gs-speed" min="1" max="200" step="1" value="50">
+      <span class="gs-val" id="gs-speed-val">50</span>
+    </div>
+  </div>
+
+  <div class="gs-section">
+    <div class="gs-section-title">Text</div>
+    <div class="gs-row">
+      <span class="gs-label">Font size</span>
+      <input type="range" id="gs-fontsize" min="20" max="90" step="2" value="42">
+      <span class="gs-val" id="gs-fontsize-val">42</span>
+    </div>
+    <div class="gs-row">
+      <span class="gs-label">Margin</span>
+      <input type="range" id="gs-margin" min="0" max="20" step="1" value="5">
+      <span class="gs-val" id="gs-margin-val">5%</span>
+    </div>
+    <div class="gs-toggle-row">
+      <span class="gs-toggle-label">Mirror text</span>
+      <button class="gs-toggle-btn" id="gs-flip-btn" data-val="0">Off</button>
+    </div>
+    <div class="gs-hint">Flip text horizontally + vertically for a teleprompter mirror/beamsplitter setup.</div>
+    <div class="gs-toggle-row">
+      <span class="gs-toggle-label">Lock orientation</span>
+      <button class="gs-toggle-btn" id="gs-orient-btn" data-val="0">Off</button>
+    </div>
+    <div class="gs-hint">Lock to landscape or portrait when reading. Tap Off → Landscape or Portrait to lock.</div>
+    <div id="gs-orient-mode" style="display:none;gap:8px;margin-bottom:16px;margin-top:-8px;">
+      <button class="gs-toggle-btn" id="btn-orient-land">Landscape</button>
+      <button class="gs-toggle-btn" id="btn-orient-port">Portrait</button>
+    </div>
+  </div>
+
+  <div class="gs-section">
+    <div class="gs-section-title">Joystick / Gamepad</div>
+    <div style="color:#666;font-size:13px;line-height:1.6;padding-bottom:20px;">
+      Connect a Bluetooth joystick/controller before opening a script.<br><br>
+      <strong style="color:#999">Button mapping:</strong><br>
+      • Button 0 (A / ✕) — Play / Pause<br>
+      • Button 1 (B / ○) — Scroll faster (+10)<br>
+      • Button 2 (X / □) — Scroll slower (−10)<br>
+      • D-pad Up / Left stick up — Scroll backward<br>
+      • D-pad Down / Left stick down — Scroll forward<br>
+      • Left axis — Fine speed control<br><br>
+      Pair your joystick via iPhone Bluetooth settings first, then connect here.
+    </div>
+  </div>
+</div>
+
+<!-- ===== READ SCREEN ===== -->
+<div id="screen-read">
+  <div id="scroll-container">
+    <div id="scroll-content">
+      <div id="text-body"></div>
+    </div>
+  </div>
+  <div id="guide-line"></div>
+
+  <div id="top-bar">
+    <button id="btn-back" onclick="goBack()">← Exit</button>
+    <span id="script-title-bar">—</span>
+    <button id="btn-settings-toggle" onclick="toggleSettings()">⚙</button>
+  </div>
+
+  <div id="settings-panel">
+    <div class="sp-row">
+      <span class="sp-label">Speed</span>
+      <input type="range" id="sp-speed" min="1" max="200" step="1">
+      <span class="sp-val" id="sp-speed-val">50</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label">Font size</span>
+      <input type="range" id="sp-fontsize" min="20" max="90" step="2">
+      <span class="sp-val" id="sp-fontsize-val">42</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-label">Margin</span>
+      <input type="range" id="sp-margin" min="0" max="20" step="1">
+      <span class="sp-val" id="sp-margin-val">5%</span>
+    </div>
+    <div class="sp-row toggle-row">
+      <span class="sp-label">Mirror</span>
+      <button class="toggle-btn" id="sp-flip-btn" data-val="0">Off</button>
+    </div>
+  </div>
+
+  <button id="btn-play" onclick="togglePlay()">▶</button>
+  <div id="joystick-status">No gamepad</div>
+</div>
+
+<script>
+// ===================== STATE =====================
+const DB_KEY = 'tp_scripts';
+const SETTINGS_KEY = 'tp_settings';
+
+let scripts = [];
+let settings = {speed:50, fontSize:42, margin:5, flip:0, orientLock:'off'};
+let currentScript = null;
+let isPlaying = false;
+let scrollY = 0;
+let lastTime = null;
+let rafId = null;
+let editingId = null;
+let gamepadIndex = null;
+let lastGamepadButtons = [];
+
+// ===================== STORAGE =====================
+function loadData(){
+  try{scripts=JSON.parse(localStorage.getItem(DB_KEY)||'[]');}catch{scripts=[];}
+  try{const s=JSON.parse(localStorage.getItem(SETTINGS_KEY)); if(s) settings=Object.assign(settings,s);}catch{}
+}
+function saveData(){
+  localStorage.setItem(DB_KEY, JSON.stringify(scripts));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// ===================== SCREENS =====================
+const screens = ['screen-menu','screen-editor','screen-gsettings','screen-read'];
+function showScreen(id){
+  screens.forEach(s=>{
+    const el = document.getElementById(s);
+    el.style.display = (s===id) ? (s==='screen-menu'?'flex':'flex') : 'none';
+    if(s==='screen-editor'||s==='screen-gsettings') el.style.flexDirection='column';
+  });
+}
+
+// ===================== MENU =====================
+function renderMenu(){
+  const list = document.getElementById('script-list');
+  const empty = document.getElementById('empty-state');
+  list.innerHTML = '';
+  if(scripts.length===0){empty.style.display='block';return;}
+  empty.style.display='none';
+  scripts.forEach(s=>{
+    const d = document.createElement('div');
+    d.className = 'script-item';
+    const wordCount = s.body.split(/\s+/).filter(Boolean).length;
+    d.innerHTML = `
+      <div class="script-item-info">
+        <div class="script-item-name">${esc(s.title||'Untitled')}</div>
+        <div class="script-item-meta">${wordCount} words</div>
+      </div>
+      <div class="script-item-actions">
+        <button class="btn-delete" data-id="${s.id}">✕</button>
+        <button class="btn-delete" data-edit="${s.id}" style="color:#aaa">Edit</button>
+      </div>
+    `;
+    d.querySelector(`[data-id="${s.id}"]`).addEventListener('click', e=>{e.stopPropagation();deleteScript(s.id);});
+    d.querySelector(`[data-edit="${s.id}"]`).addEventListener('click', e=>{e.stopPropagation();openEditor(s.id);});
+    d.addEventListener('click', ()=>openScript(s.id));
+    list.appendChild(d);
+  });
+}
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function deleteScript(id){
+  if(!confirm('Delete this script?')) return;
+  scripts = scripts.filter(s=>s.id!==id);
+  saveData(); renderMenu();
+}
+
+// ===================== EDITOR =====================
+function openEditor(id=null){
+  editingId = id;
+  if(id){
+    const s = scripts.find(x=>x.id===id);
+    document.getElementById('inp-title').value = s.title||'';
+    document.getElementById('txt-editor').value = s.body||'';
+  } else {
+    document.getElementById('inp-title').value = '';
+    document.getElementById('txt-editor').value = '';
+  }
+  showScreen('screen-editor');
+}
+
+document.getElementById('btn-editor-back').onclick = ()=>{showScreen('screen-menu');};
+document.getElementById('btn-new-script').onclick = ()=>openEditor();
+document.getElementById('btn-editor-save').onclick = ()=>{
+  const title = document.getElementById('inp-title').value.trim() || 'Untitled';
+  const body = document.getElementById('txt-editor').value;
+  if(editingId){
+    const s = scripts.find(x=>x.id===editingId);
+    s.title = title; s.body = body;
+  } else {
+    scripts.push({id: Date.now().toString(), title, body});
+  }
+  saveData(); renderMenu(); showScreen('screen-menu');
+};
+
+// ===================== GLOBAL SETTINGS =====================
+document.getElementById('btn-open-gsettings').onclick = ()=>{loadGlobalSettings(); showScreen('screen-gsettings');};
+document.getElementById('btn-gs-back').onclick = ()=>{showScreen('screen-menu');};
+
+function loadGlobalSettings(){
+  setSlider('gs-speed','gs-speed-val',settings.speed,'');
+  setSlider('gs-fontsize','gs-fontsize-val',settings.fontSize,'');
+  setSlider('gs-margin','gs-margin-val',settings.margin,'%');
+
+  const fb = document.getElementById('gs-flip-btn');
+  fb.dataset.val = settings.flip;
+  fb.textContent = settings.flip ? 'On' : 'Off';
+  fb.className = 'gs-toggle-btn' + (settings.flip?' active':'');
+
+  const ob = document.getElementById('gs-orient-btn');
+  ob.dataset.val = settings.orientLock==='off'?0:1;
+  ob.textContent = settings.orientLock==='off'?'Off':'On';
+  ob.className = 'gs-toggle-btn' + (settings.orientLock!=='off'?' active':'');
+  document.getElementById('gs-orient-mode').style.display = settings.orientLock!=='off'?'flex':'none';
+
+  const lBtn = document.getElementById('btn-orient-land');
+  const pBtn = document.getElementById('btn-orient-port');
+  lBtn.className = 'gs-toggle-btn'+(settings.orientLock==='landscape'?' active':'');
+  pBtn.className = 'gs-toggle-btn'+(settings.orientLock==='portrait'?' active':'');
+}
+
+function setSlider(sliderId, valId, val, suffix){
+  document.getElementById(sliderId).value = val;
+  document.getElementById(valId).textContent = val + suffix;
+}
+
+['gs-speed','gs-fontsize','gs-margin'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    const map = {'gs-speed':'speed','gs-fontsize':'fontSize','gs-margin':'margin'};
+    const suffix = id==='gs-margin'?'%':'';
+    const key = map[id];
+    settings[key] = parseInt(e.target.value);
+    document.getElementById(id+'-val').textContent = e.target.value + suffix;
+    saveData();
+  });
+});
+
+document.getElementById('gs-flip-btn').onclick = function(){
+  settings.flip = settings.flip ? 0 : 1;
+  this.dataset.val = settings.flip;
+  this.textContent = settings.flip?'On':'Off';
+  this.className = 'gs-toggle-btn'+(settings.flip?' active':'');
+  saveData();
+};
+document.getElementById('gs-orient-btn').onclick = function(){
+  if(settings.orientLock==='off'){
+    settings.orientLock = 'landscape';
+    this.textContent='On'; this.className='gs-toggle-btn active';
+    document.getElementById('gs-orient-mode').style.display='flex';
+  } else {
+    settings.orientLock='off';
+    this.textContent='Off'; this.className='gs-toggle-btn';
+    document.getElementById('gs-orient-mode').style.display='none';
+  }
+  saveData();
+};
+document.getElementById('btn-orient-land').onclick = function(){
+  settings.orientLock='landscape'; saveData();
+  document.getElementById('btn-orient-land').className='gs-toggle-btn active';
+  document.getElementById('btn-orient-port').className='gs-toggle-btn';
+};
+document.getElementById('btn-orient-port').onclick = function(){
+  settings.orientLock='portrait'; saveData();
+  document.getElementById('btn-orient-port').className='gs-toggle-btn active';
+  document.getElementById('btn-orient-land').className='gs-toggle-btn';
+};
+
+// ===================== OPEN SCRIPT =====================
+function openScript(id){
+  currentScript = scripts.find(s=>s.id===id);
+  if(!currentScript) return;
+
+  document.getElementById('text-body').textContent = currentScript.body;
+  document.getElementById('script-title-bar').textContent = currentScript.title||'Untitled';
+
+  // Apply settings
+  applySettingsToRead();
+
+  // Reset scroll
+  scrollY = 0;
+  applyScroll();
+  isPlaying = false;
+  updatePlayBtn();
+
+  document.getElementById('settings-panel').classList.remove('visible');
+  showScreen('screen-read');
+
+  // Orientation lock
+  lockOrientation();
+
+  // Start gamepad polling
+  startGamepadPolling();
+}
+
+function applySettingsToRead(){
+  const root = document.documentElement;
+  root.style.setProperty('--font-size', settings.fontSize);
+  root.style.setProperty('--margin', settings.margin);
+
+  // In-panel sliders sync
+  setSlider('sp-speed','sp-speed-val',settings.speed,'');
+  setSlider('sp-fontsize','sp-fontsize-val',settings.fontSize,'');
+  setSlider('sp-margin','sp-margin-val',settings.margin,'%');
+
+  const fb = document.getElementById('sp-flip-btn');
+  fb.dataset.val = settings.flip;
+  fb.textContent = settings.flip?'On':'Off';
+  fb.className = 'toggle-btn'+(settings.flip?' active':'');
+
+  const tb = document.getElementById('text-body');
+  if(settings.flip){tb.classList.add('flipped');}
+  else{tb.classList.remove('flipped');}
+}
+
+// ===================== IN-READ SETTINGS =====================
+function toggleSettings(){
+  document.getElementById('settings-panel').classList.toggle('visible');
+}
+
+['sp-speed','sp-fontsize','sp-margin'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', e=>{
+    const map = {'sp-speed':'speed','sp-fontsize':'fontSize','sp-margin':'margin'};
+    const suffix = id==='sp-margin'?'%':'';
+    const key = map[id];
+    settings[key] = parseInt(e.target.value);
+    document.getElementById(id+'-val').textContent = e.target.value + suffix;
+
+    const root = document.documentElement;
+    if(key==='fontSize') root.style.setProperty('--font-size', settings.fontSize);
+    if(key==='margin') root.style.setProperty('--margin', settings.margin);
+    saveData();
+  });
+});
+
+document.getElementById('sp-flip-btn').onclick = function(){
+  settings.flip = settings.flip ? 0 : 1;
+  this.dataset.val = settings.flip;
+  this.textContent = settings.flip?'On':'Off';
+  this.className = 'toggle-btn'+(settings.flip?' active':'');
+  const tb = document.getElementById('text-body');
+  if(settings.flip){tb.classList.add('flipped');}else{tb.classList.remove('flipped');}
+  saveData();
+};
+
+// ===================== SCROLL ENGINE =====================
+function applyScroll(){
+  document.getElementById('scroll-content').style.transform = `translateY(${-scrollY}px)`;
+}
+
+function getMaxScroll(){
+  const content = document.getElementById('scroll-content');
+  return Math.max(0, content.scrollHeight - window.innerHeight);
+}
+
+function animateScroll(ts){
+  if(!isPlaying){lastTime=null;return;}
+  if(!lastTime) lastTime=ts;
+  const dt = ts - lastTime;
+  lastTime = ts;
+  // speed 1-200 → pixels per second 5-600
+  const pps = (settings.speed / 200) * 595 + 5;
+  scrollY += (pps * dt) / 1000;
+  const max = getMaxScroll();
+  if(scrollY >= max){scrollY=max; stop();}
+  applyScroll();
+  rafId = requestAnimationFrame(animateScroll);
+}
+
+function play(){isPlaying=true; lastTime=null; rafId=requestAnimationFrame(animateScroll); updatePlayBtn();}
+function stop(){isPlaying=false; cancelAnimationFrame(rafId); updatePlayBtn();}
+function togglePlay(){isPlaying ? stop() : play();}
+
+function updatePlayBtn(){
+  document.getElementById('btn-play').textContent = isPlaying ? '⏸' : '▶';
+}
+
+// ===================== BACK =====================
+function goBack(){
+  stop(); stopGamepadPolling(); unlockOrientation();
+  showScreen('screen-menu');
+}
+
+// ===================== ORIENTATION LOCK =====================
+function lockOrientation(){
+  if(settings.orientLock==='landscape'){
+    screen.orientation?.lock('landscape').catch(()=>{});
+  } else if(settings.orientLock==='portrait'){
+    screen.orientation?.lock('portrait').catch(()=>{});
+  }
+}
+function unlockOrientation(){
+  screen.orientation?.unlock?.();
+}
+
+// ===================== GAMEPAD =====================
+let gamepadPollId = null;
+let gpSpeedMod = 0; // fine speed from axis
+
+window.addEventListener('gamepadconnected', e=>{
+  gamepadIndex = e.gamepad.index;
+  document.getElementById('joystick-status').textContent = '🎮 ' + (e.gamepad.id.slice(0,30));
+  document.getElementById('joystick-status').className = 'connected';
+});
+window.addEventListener('gamepaddisconnected', e=>{
+  if(e.gamepad.index === gamepadIndex) gamepadIndex = null;
+  document.getElementById('joystick-status').textContent = 'No gamepad';
+  document.getElementById('joystick-status').className = '';
+});
+
+function startGamepadPolling(){
+  stopGamepadPolling();
+  lastGamepadButtons = [];
+  gamepadPollId = setInterval(pollGamepad, 50);
+}
+function stopGamepadPolling(){
+  clearInterval(gamepadPollId);
+}
+
+function pollGamepad(){
+  const gamepads = navigator.getGamepads();
+  // auto-detect first available
+  let gp = null;
+  if(gamepadIndex !== null) gp = gamepads[gamepadIndex];
+  if(!gp){
+    for(let g of gamepads){ if(g){gp=g; gamepadIndex=g.index; break;} }
+  }
+  if(!gp) return;
+
+  // Update status
+  document.getElementById('joystick-status').textContent = '🎮 Connected';
+  document.getElementById('joystick-status').className = 'connected';
+
+  const btns = gp.buttons;
+
+  // Button 0 = play/pause (edge detect)
+  if(btns[0]?.pressed && !lastGamepadButtons[0]) togglePlay();
+  // Button 1 = speed up
+  if(btns[1]?.pressed && !lastGamepadButtons[1]){
+    settings.speed = Math.min(200, settings.speed+10);
+    syncSpeedSliders(); saveData();
+  }
+  // Button 2 = slow down
+  if(btns[2]?.pressed && !lastGamepadButtons[2]){
+    settings.speed = Math.max(1, settings.speed-10);
+    syncSpeedSliders(); saveData();
+  }
+
+  // D-pad buttons (indices 12=up, 13=down)
+  if(btns[12]?.pressed) scrollY = Math.max(0, scrollY - 8);
+  if(btns[13]?.pressed) scrollY = Math.min(getMaxScroll(), scrollY + 8);
+  if(btns[12]?.pressed || btns[13]?.pressed) applyScroll();
+
+  // Left stick Y axis (index 1) — fine scroll override while held
+  const axisY = gp.axes[1] || 0;
+  if(Math.abs(axisY) > 0.15){
+    if(isPlaying){
+      // Axis up = slow down, axis down = speed up (feels natural)
+      const speedMult = 1 + axisY * 0.5; // 0.5x to 1.5x
+      scrollY += (axisY * 4);
+      scrollY = Math.max(0, Math.min(getMaxScroll(), scrollY));
+      applyScroll();
+    } else {
+      // Manual scrub when paused
+      scrollY = Math.max(0, Math.min(getMaxScroll(), scrollY + axisY * 6));
+      applyScroll();
+    }
+  }
+
+  lastGamepadButtons = btns.map(b=>b?.pressed||false);
+}
+
+function syncSpeedSliders(){
+  document.getElementById('sp-speed').value = settings.speed;
+  document.getElementById('sp-speed-val').textContent = settings.speed;
+  document.getElementById('gs-speed').value = settings.speed;
+  document.getElementById('gs-speed-val').textContent = settings.speed;
+}
+
+// ===================== TOUCH SCROLL (manual) =====================
+let touchStartY = 0;
+let touchScrollStart = 0;
+document.getElementById('scroll-container').addEventListener('touchstart', e=>{
+  if(isPlaying) return;
+  touchStartY = e.touches[0].clientY;
+  touchScrollStart = scrollY;
+},{passive:true});
+document.getElementById('scroll-container').addEventListener('touchmove', e=>{
+  if(isPlaying) return;
+  const dy = touchStartY - e.touches[0].clientY;
+  scrollY = Math.max(0, Math.min(getMaxScroll(), touchScrollStart + dy));
+  applyScroll();
+},{passive:true});
+
+// ===================== INIT =====================
+loadData();
+renderMenu();
+showScreen('screen-menu');
+</script>
+</body>
+</html>
