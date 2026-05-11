@@ -320,11 +320,13 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font
   </div>
 
   <button id="btn-play" onclick="togglePlay()">▶</button>
-  <div id="debug-bar" style="position:fixed;top:50px;left:0;right:0;background:rgba(0,0,0,0.92);color:#0f0;font-size:15px;padding:10px 14px;z-index:500;font-family:monospace;line-height:2;border-bottom:2px solid #0f0;">
-    <div>focus: <span id="dbg-focus">no</span> &nbsp;|&nbsp; gamepad: <span id="dbg-gp">no</span></div>
-    <div>last key: <span id="dbg-key" style="color:#ff0;font-size:18px;">— press a button —</span></div>
-    <div id="dbg-tap" style="color:#f80;font-weight:bold;">👆 TAP HERE FIRST, then press remote</div>
-  </div>
+</div>
+
+<!-- debug bar lives outside screen-read to avoid overflow:hidden clipping -->
+<div id="debug-bar" style="display:none;position:fixed;top:50px;left:0;right:0;background:rgba(0,0,0,0.92);color:#0f0;font-size:15px;padding:10px 14px;z-index:9999;font-family:monospace;line-height:2;border-bottom:2px solid #0f0;">
+  <div>focus: <span id="dbg-focus">no</span> &nbsp;|&nbsp; gamepad: <span id="dbg-gp">no</span></div>
+  <div>last key: <span id="dbg-key" style="color:#ff0;font-size:18px;">— press a button —</span></div>
+  <div id="dbg-tap" style="color:#f80;font-weight:bold;">👆 TAP HERE FIRST, then press remote</div>
 </div>
 
 <script>
@@ -358,9 +360,10 @@ const screens = ['screen-menu','screen-editor','screen-gsettings','screen-read']
 function showScreen(id){
   screens.forEach(s=>{
     const el = document.getElementById(s);
-    el.style.display = (s===id) ? (s==='screen-menu'?'flex':'flex') : 'none';
+    el.style.display = (s===id) ? 'flex' : 'none';
     if(s==='screen-editor'||s==='screen-gsettings') el.style.flexDirection='column';
   });
+  document.getElementById('debug-bar').style.display = (id==='screen-read') ? 'block' : 'none';
 }
 
 // ===================== MENU =====================
