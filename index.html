@@ -642,13 +642,20 @@ window.addEventListener('gamepaddisconnected', e=>{
   dbgSetGP('disconnected');
 });
 
+let gpRafRunning = false;
 function startGamepadPolling(){
-  stopGamepadPolling();
   lastGamepadButtons = [];
-  gamepadPollId = setInterval(pollGamepad, 50);
+  if(gpRafRunning) return;
+  gpRafRunning = true;
+  function rafPoll(){
+    if(!gpRafRunning) return;
+    pollGamepad();
+    requestAnimationFrame(rafPoll);
+  }
+  requestAnimationFrame(rafPoll);
 }
 function stopGamepadPolling(){
-  clearInterval(gamepadPollId);
+  gpRafRunning = false;
 }
 
 function pollGamepad(){
