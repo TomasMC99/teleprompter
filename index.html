@@ -661,21 +661,24 @@ function pollGamepad(){
   }
   if(!gp) return;
 
-  dbgSetGP('🎮 btn:' + btns.map((b,i)=>b?.pressed?i:'').filter(Boolean).join(',') );
-
   const btns = gp.buttons;
 
+  // show which buttons are pressed in debug bar
+  const pressed = btns.map((b,i)=>b?.pressed?i:'').filter(v=>v!=='');
+  dbgSetGP('🎮 ' + gp.id.slice(0,16) + (pressed.length ? ' btn:'+pressed.join(',') : ''));
+  if(pressed.length) dbgSetKey('gamepad btn ' + pressed.join(','));
+
   // Button 0 = play/pause (edge detect)
-  if(btns[0]?.pressed && !lastGamepadButtons[0]) togglePlay();
+  if(btns[0]?.pressed && !lastGamepadButtons[0]){ togglePlay(); showKeyHint('⏯'); }
   // Button 1 = speed up
   if(btns[1]?.pressed && !lastGamepadButtons[1]){
     settings.speed = Math.min(200, settings.speed+10);
-    syncSpeedSliders(); saveData();
+    syncSpeedSliders(); saveData(); showKeyHint('🐇 '+settings.speed);
   }
   // Button 2 = slow down
   if(btns[2]?.pressed && !lastGamepadButtons[2]){
     settings.speed = Math.max(1, settings.speed-10);
-    syncSpeedSliders(); saveData();
+    syncSpeedSliders(); saveData(); showKeyHint('🐢 '+settings.speed);
   }
 
   // D-pad buttons (indices 12=up, 13=down)
@@ -683,17 +686,14 @@ function pollGamepad(){
   if(btns[13]?.pressed) scrollY = Math.min(getMaxScroll(), scrollY + 8);
   if(btns[12]?.pressed || btns[13]?.pressed) applyScroll();
 
-  // Left stick Y axis (index 1) — fine scroll override while held
+  // Left stick Y axis
   const axisY = gp.axes[1] || 0;
   if(Math.abs(axisY) > 0.15){
     if(isPlaying){
-      // Axis up = slow down, axis down = speed up (feels natural)
-      const speedMult = 1 + axisY * 0.5; // 0.5x to 1.5x
       scrollY += (axisY * 4);
       scrollY = Math.max(0, Math.min(getMaxScroll(), scrollY));
       applyScroll();
     } else {
-      // Manual scrub when paused
       scrollY = Math.max(0, Math.min(getMaxScroll(), scrollY + axisY * 6));
       applyScroll();
     }
