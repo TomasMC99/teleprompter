@@ -283,7 +283,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font
 
 <!-- ===== READ SCREEN ===== -->
 <div id="screen-read">
-  <input id="bt-focus-trap" type="text" readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;border:none;outline:none;top:0;left:0;">
+  <input id="bt-focus-trap" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute;opacity:0;width:1px;height:1px;border:none;outline:none;top:0;left:0;font-size:16px;">
   <div id="scroll-container">
     <div id="scroll-content">
       <div id="text-body"></div>
@@ -320,7 +320,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font
   </div>
 
   <button id="btn-play" onclick="togglePlay()">▶</button>
-  <div id="joystick-status">No gamepad</div>
+  <div id="debug-bar" style="position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font-size:12px;padding:6px 10px;z-index:200;font-family:monospace;line-height:1.6;">
+    <div>focus: <span id="dbg-focus">no</span> | gamepad: <span id="dbg-gp">no</span></div>
+    <div>last key: <span id="dbg-key">—</span></div>
+    <div id="dbg-tap" style="color:#ff0;">⬆ TAP SCREEN to activate remote</div>
+  </div>
 </div>
 
 <script>
@@ -628,13 +632,11 @@ let gpSpeedMod = 0; // fine speed from axis
 
 window.addEventListener('gamepadconnected', e=>{
   gamepadIndex = e.gamepad.index;
-  document.getElementById('joystick-status').textContent = '🎮 ' + (e.gamepad.id.slice(0,30));
-  document.getElementById('joystick-status').className = 'connected';
+  dbgSetGP('🎮 ' + e.gamepad.id.slice(0,20));
 });
 window.addEventListener('gamepaddisconnected', e=>{
   if(e.gamepad.index === gamepadIndex) gamepadIndex = null;
-  document.getElementById('joystick-status').textContent = 'No gamepad';
-  document.getElementById('joystick-status').className = '';
+  dbgSetGP('disconnected');
 });
 
 function startGamepadPolling(){
@@ -656,9 +658,7 @@ function pollGamepad(){
   }
   if(!gp) return;
 
-  // Update status
-  document.getElementById('joystick-status').textContent = '🎮 Connected';
-  document.getElementById('joystick-status').className = 'connected';
+  dbgSetGP('🎮 btn:' + btns.map((b,i)=>b?.pressed?i:'').filter(Boolean).join(',') );
 
   const btns = gp.buttons;
 
@@ -712,49 +712,41 @@ function syncSpeedSliders(){
 // B button   → ArrowDown or b → scroll down a bit
 // A button   → ArrowLeft or a → slow down speed
 // Y button   → ArrowRight or y→ speed up
+// ---- debug helpers ----
+function dbgSetFocus(v){ const el=document.getElementById('dbg-focus'); if(el) el.textContent=v?'YES ✓':'no'; }
+function dbgSetKey(k){   const el=document.getElementById('dbg-key');   if(el) el.textContent=k; }
+function dbgSetGP(v){    const el=document.getElementById('dbg-gp');    if(el) el.textContent=v; }
+
+const trap = document.getElementById('bt-focus-trap');
+trap.addEventListener('focus', ()=>{ dbgSetFocus(true);  document.getElementById('dbg-tap').style.display='none'; });
+trap.addEventListener('blur',  ()=>{ dbgSetFocus(false);
+  if(document.getElementById('screen-read').style.display !== 'none') setTimeout(()=>trap.focus(), 50);
+});
+
+// tap anywhere on reading screen → refocus trap
+document.getElementById('screen-read').addEventListener('touchend', function(e){
+  if(e.target.closest('button,input,select')) return;
+  trap.focus();
+}, {passive:true});
+
 document.addEventListener('keydown', function(e){
   if(document.getElementById('screen-read').style.display === 'none') return;
   const key = e.key;
-  showKeyHint(key); // always show what key was received (debug)
+  dbgSetKey('"' + key + '" code:' + e.keyCode);
   switch(key){
     case 'Enter':
     case ' ':
-      e.preventDefault();
-      togglePlay();
-      showKeyHint('⏯');
-      break;
-    case 'ArrowUp':
-    case 'x':
-    case 'X':
-      e.preventDefault();
-      scrollY = Math.max(0, scrollY - 60);
-      applyScroll();
-      showKeyHint('▲');
-      break;
-    case 'ArrowDown':
-    case 'b':
-    case 'B':
-      e.preventDefault();
-      scrollY = Math.min(getMaxScroll(), scrollY + 60);
-      applyScroll();
-      showKeyHint('▼');
-      break;
-    case 'ArrowLeft':
-    case 'a':
-    case 'A':
-      e.preventDefault();
-      settings.speed = Math.max(1, settings.speed - 10);
-      syncSpeedSliders(); saveData();
-      showKeyHint('🐢 ' + settings.speed);
-      break;
-    case 'ArrowRight':
-    case 'y':
-    case 'Y':
-      e.preventDefault();
-      settings.speed = Math.min(200, settings.speed + 10);
-      syncSpeedSliders(); saveData();
-      showKeyHint('🐇 ' + settings.speed);
-      break;
+      e.preventDefault(); togglePlay(); showKeyHint('⏯'); break;
+    case 'ArrowUp': case 'x': case 'X':
+      e.preventDefault(); scrollY=Math.max(0,scrollY-60); applyScroll(); showKeyHint('▲'); break;
+    case 'ArrowDown': case 'b': case 'B':
+      e.preventDefault(); scrollY=Math.min(getMaxScroll(),scrollY+60); applyScroll(); showKeyHint('▼'); break;
+    case 'ArrowLeft': case 'a': case 'A':
+      e.preventDefault(); settings.speed=Math.max(1,settings.speed-10); syncSpeedSliders(); saveData(); showKeyHint('🐢 '+settings.speed); break;
+    case 'ArrowRight': case 'y': case 'Y':
+      e.preventDefault(); settings.speed=Math.min(200,settings.speed+10); syncSpeedSliders(); saveData(); showKeyHint('🐇 '+settings.speed); break;
+    default:
+      showKeyHint(key); // show unrecognised keys so we can remap
   }
 });
 
@@ -772,15 +764,8 @@ function showKeyHint(txt){
   el.textContent = txt;
   el.style.opacity = '1';
   clearTimeout(keyHintTimer);
-  keyHintTimer = setTimeout(()=>{ el.style.opacity='0'; }, 600);
+  keyHintTimer = setTimeout(()=>{ el.style.opacity='0'; }, 900);
 }
-
-// keep focus trap focused so iOS BT remote keydown events keep firing
-document.getElementById('bt-focus-trap').addEventListener('blur', function(){
-  if(document.getElementById('screen-read').style.display !== 'none'){
-    setTimeout(()=>this.focus(), 50);
-  }
-});
 
 // ===================== TOUCH SCROLL (manual) =====================
 let touchStartY = 0;
