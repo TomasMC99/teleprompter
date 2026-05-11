@@ -44,7 +44,6 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font
   padding:0 calc(var(--margin)*1%);
   white-space:pre-wrap;
   word-break:break-word;
-    text-align:center;
 }
 #text-body.flipped{transform:scaleX(-1) scaleY(-1);}
 
@@ -703,6 +702,74 @@ function syncSpeedSliders(){
   document.getElementById('sp-speed-val').textContent = settings.speed;
   document.getElementById('gs-speed').value = settings.speed;
   document.getElementById('gs-speed-val').textContent = settings.speed;
+}
+
+// ===================== KEYBOARD / BT REMOTE CONTROL =====================
+// OK button  → Enter or Space  → play/pause
+// X button   → ArrowUp or x   → scroll up a bit
+// B button   → ArrowDown or b → scroll down a bit
+// A button   → ArrowLeft or a → slow down speed
+// Y button   → ArrowRight or y→ speed up
+document.addEventListener('keydown', function(e){
+  if(document.getElementById('screen-read').style.display === 'none') return;
+  const key = e.key;
+  switch(key){
+    case 'Enter':
+    case ' ':
+      e.preventDefault();
+      togglePlay();
+      showKeyHint('⏯');
+      break;
+    case 'ArrowUp':
+    case 'x':
+    case 'X':
+      e.preventDefault();
+      scrollY = Math.max(0, scrollY - 60);
+      applyScroll();
+      showKeyHint('▲');
+      break;
+    case 'ArrowDown':
+    case 'b':
+    case 'B':
+      e.preventDefault();
+      scrollY = Math.min(getMaxScroll(), scrollY + 60);
+      applyScroll();
+      showKeyHint('▼');
+      break;
+    case 'ArrowLeft':
+    case 'a':
+    case 'A':
+      e.preventDefault();
+      settings.speed = Math.max(1, settings.speed - 10);
+      syncSpeedSliders(); saveData();
+      showKeyHint('🐢 ' + settings.speed);
+      break;
+    case 'ArrowRight':
+    case 'y':
+    case 'Y':
+      e.preventDefault();
+      settings.speed = Math.min(200, settings.speed + 10);
+      syncSpeedSliders(); saveData();
+      showKeyHint('🐇 ' + settings.speed);
+      break;
+  }
+});
+
+let keyHintTimer = null;
+function showKeyHint(txt){
+  let el = document.getElementById('key-hint');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'key-hint';
+    el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);'
+      +'background:rgba(255,255,255,0.15);color:#fff;font-size:32px;padding:16px 28px;'
+      +'border-radius:16px;z-index:99;pointer-events:none;backdrop-filter:blur(8px);';
+    document.body.appendChild(el);
+  }
+  el.textContent = txt;
+  el.style.opacity = '1';
+  clearTimeout(keyHintTimer);
+  keyHintTimer = setTimeout(()=>{ el.style.opacity='0'; }, 600);
 }
 
 // ===================== TOUCH SCROLL (manual) =====================
