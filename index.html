@@ -283,6 +283,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font
 
 <!-- ===== READ SCREEN ===== -->
 <div id="screen-read">
+  <input id="bt-focus-trap" type="text" readonly autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;border:none;outline:none;top:0;left:0;">
   <div id="scroll-container">
     <div id="scroll-content">
       <div id="text-body"></div>
@@ -356,6 +357,7 @@ function showScreen(id){
     el.style.display = (s===id) ? (s==='screen-menu'?'flex':'flex') : 'none';
     if(s==='screen-editor'||s==='screen-gsettings') el.style.flexDirection='column';
   });
+  if(id==='screen-read') setTimeout(()=>{ document.getElementById('bt-focus-trap').focus(); }, 150);
 }
 
 // ===================== MENU =====================
@@ -771,6 +773,13 @@ function showKeyHint(txt){
   clearTimeout(keyHintTimer);
   keyHintTimer = setTimeout(()=>{ el.style.opacity='0'; }, 600);
 }
+
+// keep focus trap focused so iOS BT remote keydown events keep firing
+document.getElementById('bt-focus-trap').addEventListener('blur', function(){
+  if(document.getElementById('screen-read').style.display !== 'none'){
+    setTimeout(()=>this.focus(), 50);
+  }
+});
 
 // ===================== TOUCH SCROLL (manual) =====================
 let touchStartY = 0;
